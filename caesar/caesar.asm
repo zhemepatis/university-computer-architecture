@@ -14,27 +14,31 @@
         mov ax, @data
         mov ds, ax
 
-        ; prints msg1
+        ; printing msg1
         mov cx, 20
         mov dx, offset msg1
         call print
         
-        ; accepts user input
+        ; accepting user input
         mov dx, offset in_buff
         mov ah, 0ah
         int 21h
+        
+        ; preparing for loop
+        ; if cx is empty, terminating app
+        xor cx, cx 
+        mov cl, [in_buff+1]
+        jcxz exit
 
-        xor cx, cx  ; makes cx equal to 0
-        mov cl, [in_buff+1] ; moves input length into cl
-        jcxz exit   ; if input was empty, then application stops
-
-        xor bx, bx  ; makes bx equal to 0
+        ; seting bx to 0, needed to know current position
+        xor bx, bx
 
         encrypting:
             ; getting new character to encrypt
             mov al, ds:[in_buff + 2 + bx]
 
-            ;  checking whether the character is letter. If it is, then encrypting it.
+            ; checking whether the character is a letter
+            ; if it is, then encrypting it
             cmp al, 41h
             jb proceed
 
@@ -50,6 +54,7 @@
             encrypt:
                 add al, 2
                 
+                ; if letter is at the end of alphabet, hopping to to the start of it
                 cmp al, 7ah
                 ja letter_overflow
 
@@ -67,12 +72,12 @@
                 inc bx                
         loop encrypting
 
-        ; prints msg2
+        ; printing msg2
         mov cx, 21
         mov dx, offset msg2
         call print
 
-        ; prints encrypted message
+        ; printing encrypted message
         mov cl, [in_buff+1]
         mov dx, offset out_buff+2  
         call print
