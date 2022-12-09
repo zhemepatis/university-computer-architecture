@@ -15,48 +15,47 @@
     stats_buff db 1ah dup(?), 0dh, 0ah
     stats_init db 1ah dup(30h), 0dh, 0ah
 
-    error_msg1 db "No arguments were provided. Terminating program.", 13, 10, 24h
-    error_msg2 db "Unable open the file named ", 24h
-
     newline db 13, 10
+    error_msg1 db "No arguments were provided.", 24h
+    error_msg2 db "Unable open the file named ", 24h
+    help_msg db "This program accepts filenames as arguments and counts the frequency of letters in the files. The results are presented as an ASCII character graph in the 'stats.txt' file.", 24h
 
 .code
     start:
         mov ax, @data
         mov ds, ax
-
-        ; creating "stats.txt" file
-        mov ax, 3c00h
-        mov dx, offset stats_file
-        int 21h
-        mov stats_handler, ax
     
-        ; prep to read args
+        ; checking if there were arguments provided, if no, program is terminated
         xor cx, cx
-        mov cl, es:[80h]                ; needed to know the length of arguments line
-
-        cmp cl, 0h                      ; checking if there are arguments provided, if no - terminating the program
+        mov cl, es:[80h]
+        cmp cl, 0h
         mov dx, offset error_msg1
         je print_error
 
-        ; creating & initialising stats file
+        ; creating "stats.txt" file
         mov ax, 3c00h
         xor cx, cx
         mov dx, offset stats_file
         int 21h
         mov stats_handler, ax
 
+        ; initialising "stats.txt"
         mov dx, offset stats_init
         call print_line
         call return_to_start
         
-        mov si, 0081h                   ; argument line offset in memory block
         call cmd_line_args
 
         jmp terminate_program
 
         print_error:
             mov ah, 09h
+            int 21h
+            jmp terminate_program
+
+        print_help:
+            mov ah, 09h
+            mov dx, offset help_msg
             int 21h
 
         terminate_program:
@@ -74,6 +73,165 @@
             ret
 
         ; PROCEDURES
+        cmd_line_args proc  ; procedure that checks arguments
+            ; checking if help is needed
+            mov cx, es:[82h]
+            
+            cmp cx, "?/"
+            jne read_args
+
+            mov cl, es:[84h]
+            cmp cl, 0dh
+            je print_help
+
+            cmp cl, 20h
+            je print_help
+            
+            ; no help was needed
+            read_args:
+                mov si, 0081h  
+                xor cx, cx
+                mov cl, es:[80h]
+
+                xor bx, bx
+                reading_args:
+                    push cx
+                    push bx
+
+                    mov al, es:[si + bx]
+
+                    cmp al, 20h
+                    jne found_character
+                    jmp found_space
+
+                    found_character:
+                        xor cx, cx
+                        mov cl, ds:[filename_length]
+                        mov bx, cx
+                        mov ds:[filename + bx], al
+                        inc filename_length
+
+                        pop bx
+                        push bx
+                        inc bx
+                        cmp bl, es:[80h]
+                        jne proceed_reading_args
+
+                        call operating_with_files
+
+                        jmp proceed_reading_args
+
+                    found_space:
+                        xor cx, cx
+                        mov cl, ds:[filename_length]
+                        cmp cx, 0h
+                        je proceed_reading_args
+
+                        call operating_with_files
+
+                        ; resetting values
+                        xor cx, cx
+                        mov cl, ds:[filename_length]
+                        xor bx, bx
+                        reset_values:
+                            mov ds:[filename_length + bx], 0h
+                            inc bx
+                        loop reset_values
+                        mov ds:[filename_length], 0h
+
+                    proceed_reading_args:
+                        pop bx
+                        inc bx
+                        pop cx
+                loop reading_args
+
+            ret
+        cmd_line_args endp
+
+        operating_with_files proc     ; open file and read data
+            ; opening input file
+            mov ax, 3d00h
+            mov dx, offset filename
+            int 21h
+            jc unable_open_file
+            mov file_handler, ax
+
+            mov dx, offset buff
+            reading_data:
+                ; reading data from input file
+                mov ax, 3f00h
+                mov cx, 200h
+                mov bx, file_handler
+                int 21h
+
+                mov cx, ax
+                jcxz exit_operating_with_files
+
+                xor bx, bx
+                data_analysis:
+                    push cx
+                    push bx
+
+                    mov al, [buff + bx]
+                    
+                    cmp al, 41h
+                    jb proceed_data_analysis
+
+                    cmp al, 5ah
+                    jbe lower_letter
+
+                    cmp al, 61h
+                    jb proceed_data_analysis           
+
+                    cmp al, 7ah
+                    ja proceed_data_analysis
+
+                    jmp stats
+
+                    lower_letter:
+                        add al, 20h
+
+                    stats:
+                        sub al, 61h
+                        call altering_stats
+
+                    proceed_data_analysis:
+                        pop bx
+                        inc bx
+                        pop cx
+                loop data_analysis
+            loop reading_data
+
+            mov bx, file_handler
+            call close_file
+
+            jmp exit_operating_with_files
+
+            unable_open_file:
+                ; printing error message - err_msg2
+                mov ah, 09h
+                mov dx, offset error_msg2
+                int 21h
+
+                ; printing name of the file that caused the error
+                mov ah, 40h
+                mov bx, 0001h
+                mov dx, offset filename
+                xor cx, cx
+                mov cl, filename_length
+                int 21h
+
+                ; printing newline
+                mov ah, 40h
+                mov bx, 0001h
+                mov dx, offset newline
+                mov cl, 02h
+                int 21h
+
+            exit_operating_with_files:
+                ret
+        operating_with_files endp
+
         altering_stats proc
             push ax  
 
@@ -162,152 +320,5 @@
                 ret
 
         altering_stats endp
-
-
-        operating_with_files proc     ; open file and read data
-            ; opening input file
-            mov ax, 3d00h
-            mov dx, offset filename
-            int 21h
-            jc unable_open_file
-            mov file_handler, ax
-
-            mov dx, offset buff
-            reading_data:
-                ; reading data from input file
-                mov ax, 3f00h
-                mov cx, 200h
-                mov bx, file_handler
-                int 21h
-
-                mov cx, ax
-                jcxz exit_operating_with_files
-
-                xor bx, bx
-                data_analysis:
-                    push cx
-                    push bx
-
-                    mov al, [buff + bx]
-                    
-                    cmp al, 41h
-                    jb proceed_data_analysis
-
-                    cmp al, 5ah
-                    jbe lower_letter
-
-                    cmp al, 61h
-                    jb proceed_data_analysis           
-
-                    cmp al, 7ah
-                    ja proceed_data_analysis
-
-                    jmp stats
-
-                    lower_letter:
-                        add al, 20h
-
-                    stats:
-                        sub al, 61h
-                        call altering_stats
-
-                    proceed_data_analysis:
-                        pop bx
-                        inc bx
-                        pop cx
-                loop data_analysis
-            loop reading_data
-
-            jmp exit_operating_with_files
-
-            unable_open_file:
-                ; printing error message - err_msg2
-                mov ah, 09h
-                mov dx, offset error_msg2
-                int 21h
-
-                ; printing name of the file that caused the error
-                mov ah, 40h
-                mov bx, 0001h
-                mov dx, offset filename
-                xor cx, cx
-                mov cl, filename_length
-                int 21h
-
-                ; printing newline
-                mov ah, 40h
-                mov bx, 0001h
-                mov dx, offset newline
-                mov cl, 02h
-                int 21h
-
-                ret
-
-            exit_operating_with_files:
-                ; closing input file
-                mov bx, file_handler
-                call close_file
-
-                ret
-        operating_with_files endp
-
-  
-        cmd_line_args proc  ; procedure reading filenames
-            xor cx, cx
-            mov cl, es:[80h]                ; needed to know the length of arguments line
-            xor bx, bx
-            reading_args:
-                push cx
-                push bx
-
-                mov al, es:[si + bx]
-
-                cmp al, 20h
-                jne found_character
-                jmp found_space
-
-                found_character:
-                    xor cx, cx
-                    mov cl, ds:[filename_length]
-                    mov bx, cx
-                    mov ds:[filename + bx], al
-                    inc filename_length
-
-                    pop bx
-                    push bx
-                    inc bx
-                    cmp bl, es:[80h]
-                    jne proceed_reading_args
-
-                    call operating_with_files
-
-                    jmp proceed_reading_args
-
-                found_space:
-                    xor cx, cx
-                    mov cl, ds:[filename_length]
-                    cmp cx, 0h
-                    je proceed_reading_args
-
-                    call operating_with_files
-
-                    ; resetting values
-                    xor cx, cx
-                    mov cl, ds:[filename_length]
-                    xor bx, bx
-                    reset_values:
-                        mov ds:[filename_length + bx], 0h
-                        inc bx
-                    loop reset_values
-                    mov ds:[filename_length], 0h
-
-                proceed_reading_args:
-                    pop bx
-                    inc bx
-                    pop cx
-            loop reading_args
-
-            ret
-        cmd_line_args endp
 
     end start
