@@ -12,8 +12,11 @@
     stats_file db "stats.txt", 0
     stats_handler dw 0
     
+    quantity_marker db 23h
+    empty_marker db 2eh
+    empty_line db 1ah dup(2eh), 0dh, 0ah
+    full_line db 1ah dup(23h), 0dh, 0ah
     stats_buff db 1ah dup(?), 0dh, 0ah
-    stats_init db 1ah dup(30h), 0dh, 0ah
 
     newline db 13, 10
     error_msg1 db "No arguments were provided.", 24h
@@ -40,7 +43,7 @@
         mov stats_handler, ax
 
         ; initialising "stats.txt"
-        mov dx, offset stats_init
+        mov dx, offset full_line
         call print_line
         call return_to_start
         
@@ -237,15 +240,15 @@
 
             reading_stats:
                 call read_line
-                mov cx, ax
-                jcxz new_letter
 
                 pop bx
-                cmp [stats_buff + bx], 31h
+                mov al, [quantity_marker]
+                cmp [stats_buff + bx], al
                 push bx
                 jne reading_stats
                 
-                mov [stats_buff + bx], 30h
+                mov al, [empty_marker]
+                mov [stats_buff + bx], al
                 call set_back
                 mov dx, offset stats_buff
                 call print_line
@@ -257,28 +260,19 @@
 
                     call set_back
                     pop bx
-                    mov [stats_buff + bx], 31h
+                    mov al, [quantity_marker]
+                    mov [stats_buff + bx], al
                     mov dx, offset stats_buff
                     call print_line
 
                     jmp end_loop
 
                 new_highscore:              
-                    mov dx, offset stats_init
+                    mov dx, offset empty_line
                     call print_line
                     call set_back
                 
                     jmp new_status
-
-                new_letter:
-                    call return_to_start
-                    call read_line
-                    call return_to_start
-
-                    pop bx
-                    mov [stats_buff + bx], 31h
-                    mov dx, offset stats_buff
-                    call print_line
 
                 end_loop:
                     call return_to_start
