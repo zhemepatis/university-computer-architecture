@@ -7,10 +7,10 @@
 
     filename db 255 dup(0)
     filename_length db 0
-    file_handler dw 0
+    file_handle dw 0
 
     stats_file db "stats.txt", 0
-    stats_handler dw 0
+    stats_handle dw 0
     
     quantity_marker db 23h
     empty_marker db 2eh
@@ -40,7 +40,7 @@
         xor cx, cx
         mov dx, offset stats_file
         int 21h
-        mov stats_handler, ax
+        mov stats_handle, ax
 
         ; initialising "stats.txt"
         mov dx, offset full_line
@@ -63,7 +63,7 @@
 
         terminate_program:
             ; closing "stats.txt"
-            mov bx, file_handler
+            mov bx, file_handle
             call close_file
 
             ; terminating the application
@@ -157,14 +157,14 @@
             mov dx, offset filename
             int 21h
             jc unable_open_file
-            mov file_handler, ax
+            mov file_handle, ax
 
             mov dx, offset buff
             reading_data:
                 ; reading data from input file
                 mov ax, 3f00h
                 mov cx, 200h
-                mov bx, file_handler
+                mov bx, file_handle
                 int 21h
 
                 mov cx, ax
@@ -205,7 +205,7 @@
                 loop data_analysis
             loop reading_data
 
-            mov bx, file_handler
+            mov bx, file_handle
             call close_file
 
             jmp exit_operating_with_files
@@ -286,20 +286,20 @@
                 mov dx, offset stats_buff
                 mov ax, 3f00h
                 mov cx, 1ch
-                mov bx, stats_handler
+                mov bx, stats_handle
                 int 21h
                 ret
 
             print_line:
                 mov ax, 4000h
-                mov bx, stats_handler
+                mov bx, stats_handle
                 mov cx, 1ch
                 int 21h
                 ret
             
             return_to_start:
                 mov ax, 4200h
-                mov bx, stats_handler
+                mov bx, stats_handle
                 xor cx, cx
                 xor dx, dx
                 int 21h
@@ -307,7 +307,7 @@
 
             set_back:
                 mov ax, 4201h
-                mov bx, stats_handler
+                mov bx, stats_handle
                 mov cx, -1h
                 mov dx, -1ch
                 int 21h
