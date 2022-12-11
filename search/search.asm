@@ -159,10 +159,10 @@
             jc unable_open_file
             mov file_handle, ax
 
-            mov dx, offset buff
             reading_data:
                 ; reading data from input file
                 mov ax, 3f00h
+                mov dx, offset buff
                 mov cx, 200h
                 mov bx, file_handle
                 int 21h
@@ -170,11 +170,13 @@
                 mov cx, ax
                 jcxz exit_operating_with_files
 
+                push cx
                 xor bx, bx
                 data_analysis:
                     push cx
                     push bx
 
+                    xor ax, ax
                     mov al, [buff + bx]
                     
                     cmp al, 41h
@@ -203,6 +205,7 @@
                         inc bx
                         pop cx
                 loop data_analysis
+                pop cx
             loop reading_data
 
             mov bx, file_handle
