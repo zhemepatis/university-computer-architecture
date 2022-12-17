@@ -2,6 +2,7 @@
 *.exe
 *.obj
 *.txt
+*.com
 
 .vscode/
 arguments/
